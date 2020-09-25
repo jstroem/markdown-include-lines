@@ -139,7 +139,7 @@ class IncLinePreprocessor(Preprocessor):
         for cnt, line in enumerate(data):
             line = line.rstrip('\n')
             if cnt >= start and (cnt <= end or end == -1):
-                outcome.append(str(cnt)+": "+line)
+                outcome.append(line)
         return outcome
 
     def readFile(self,filename):
