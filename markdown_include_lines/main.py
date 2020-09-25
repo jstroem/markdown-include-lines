@@ -43,7 +43,7 @@ from markdown.preprocessors import Preprocessor
 
 # version 1.0
 #SYNTAX = re.compile(r'\{([a-z]+)\s(([0-9]+)\s-\s([0-9]+)|([0-9]+)-([0-9]+)|([0-9]+)\s-([0-9]+)|([0-9]+)-\s([0-9]+)|\*)\s(.*)}')
-#version 1.1
+#version 1.2
 SYNTAX = re.compile(r'\{([a-z]+)\s(([0-9]+)?\s?-\s?([0-9]+)?|\*|([0-9]+)|\[(.*)\])\s(.*)}')
 
 class MarkdownIncludeLines(Extension):
@@ -75,6 +75,7 @@ class IncLinePreprocessor(Preprocessor):
     def run(self,lines):
         done = False
         while not done:
+            done = True
             for line in lines:
                 loc = lines.index(line)
                 m = SYNTAX.search(line)
@@ -102,7 +103,10 @@ class IncLinePreprocessor(Preprocessor):
                         end = start = int(match.group(2))
 
                     if len(rangeList) == 0:
-                        lines = lines[:loc] +self.makeCode(filename,codetype,self.parse(filename,start,end)) + lines[loc+1:]
+                        new_lines = self.parse(filename,start,end)
+                        if len(new_lines) > 0:
+                            lines = lines[:loc] +self.makeCode(filename,codetype,new_lines) + lines[loc+1:]
+                            done = False
                     else:
                         result = []
                         for index in rangeList:
@@ -111,14 +115,12 @@ class IncLinePreprocessor(Preprocessor):
                                 result.append("[...]")
                                 result.extend(line)
                             else:
-                                result.append("Line: "+index+" Could not be found.");
-
+                                result.append("Line: "+index+" Could not be found.")
+                        done = False
                         lines = lines[:loc] +self.makeCode(filename,codetype,result)+ lines[loc+1:]
 
                     if filename != self.m_filename:
                         self.m_filename = filename
-                else:
-                    done = True
         return lines
 
     def makeCode(self,filename,codeType,codeList):
@@ -170,6 +172,6 @@ def makeExtension(*args,**kwargs):
     return MarkdownIncludeLines(kwargs)
 
 # For testing
-# if __name__ == "__main__":
-#     processor = IncLinePreprocessor(None, {"base_path": ".", "encoding": "utf-8"})
-#     print("Result:", processor.run(["{python 11- testfile.txt}"]))
+if __name__ == "__main__":
+    processor = IncLinePreprocessor(None, {"base_path": ".", "encoding": "utf-8"})
+    print("Result:", processor.run(["{python 11- filenotfound.txt}"]))
