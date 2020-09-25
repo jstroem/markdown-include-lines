@@ -9,7 +9,7 @@
 #Durch diese Lizenz ist der nachfolgende Quelltext in all seinen Erscheinungsformen [Beispiele: Kompiliert, Unkompiliert, Script Code] geschützt.
 #Im nachfolgenden Text werden die Worte Werk, Script und Quelltext genutzt Diese drei Wörter sind gleichzusetzen und zu schützen.
 #Der Autor dieses Werkes kann für keinerlei Schaden die durch das Werk enstanden sein könnten, entstehen werden verantwortlich gemacht werden.
-#  
+#
 #Rechte und Pflichten des Nutzers dieses Werkes:
 #Der Nutzer dieses Werkes verpflichtet sich, diesen Lizenztext und die Autoren-Referenz auszuweisen und in seiner originalen Erscheinungsform zu belassen.
 #Sollte dieses Werk kommerziell genutzt werden, muss der Autor per E-Mail informiert werden, wenn eine E-Mail Adresse angegeben/bekannt ist.
@@ -25,6 +25,10 @@
 # {python 15-20 include.py}
 # In case you want to include the whole file:
 # {python * include.py}
+# In case you want to include a suffix of a file:
+# {python 15- include.py}
+# In case you want to include a preffix of a file:
+# {python -15 include.py}
 # In case you want to include only one line:
 # {python 15 include.py}
 # In case you want to include only certain lines of code:
@@ -40,7 +44,7 @@ from markdown.preprocessors import Preprocessor
 # version 1.0
 #SYNTAX = re.compile(r'\{([a-z]+)\s(([0-9]+)\s-\s([0-9]+)|([0-9]+)-([0-9]+)|([0-9]+)\s-([0-9]+)|([0-9]+)-\s([0-9]+)|\*)\s(.*)}')
 #version 1.1
-SYNTAX = re.compile(r'\{([a-z]+)\s(([0-9]+)\s-\s([0-9]+)|([0-9]+)-([0-9]+)|([0-9]+)\s-([0-9]+)|([0-9]+)-\s([0-9]+)|\*|([0-9]+)|\[(.*)\])\s(.*)}')
+SYNTAX = re.compile(r'\{([a-z]+)\s(([0-9]+)?\s?-\s?([0-9]+)?|\*|([0-9]+)|\[(.*)\])\s(.*)}')
 
 class MarkdownIncludeLines(Extension):
     def __init__(self, configs={}):
@@ -66,7 +70,7 @@ class IncLinePreprocessor(Preprocessor):
     #methods:
     def __init__(self,md,config):
         super(IncLinePreprocessor, self).__init__(md)
-        self.base_path = config['base_path']
+        self.base_path = os.path.abspath(config['base_path'])
         self.encoding = config['encoding']
     def run(self,lines):
         done = False
@@ -75,44 +79,44 @@ class IncLinePreprocessor(Preprocessor):
                 loc = lines.index(line)
                 m = SYNTAX.search(line)
                 if m:
-                    match = SYNTAX.match(line);
+                    match = SYNTAX.match(line)
                     codetype = match.group(1)
-                    filename = match.group(13)
-                    start = -1;
-                    end = -1;
+                    filename = match.group(7)
+                    start = -1
+                    end = -1
+
                     rangeList = []
-                    #print (match.groups())
-                    for x in range(2, 13):
-                        if match.group(x) != None and match.group(x) != "*" and x != 2 and x != 12:
-                            if start == -1:
-                                start = int(match.group(x))
-                                continue
-                            elif end == -1:
-                                end = int(match.group(x))
-                        elif match.group(x) == "*":
-                            break
-                        elif x == 12 and match.group(x) != None:
-                            rangeList = match.group(x).split(",")
-                            break;
-                #include lines of the range start - end
-                    if (start <= 0 or end <= 0) and start <= end and len(rangeList) == 0:
-                        lines = lines[:loc] +self.makeCode(filename,codetype,self.parse(filename)) + lines[loc+1:]
-                    elif len(rangeList) == 0:
-                        lines = lines[:loc] +self.makeCode(filename,codetype,self.parse(filename,start,end,False)) + lines[loc+1:]
+                    if match.group(3) != None or match.group(4) != None:
+                        if match.group(3) != None:
+                            start = int(match.group(3))
+                        else:
+                            start = 0
+                        if match.group(4) != None:
+                            end = int(match.group(4))
+                    elif match.group(6) != None:
+                      rangeList = match.group(6).split(",")
+                    elif match.group(2) != None:
+                      if match.group(2) == "*":
+                         start = 0
+                      else:
+                        end = start = int(match.group(2))
+
+                    if len(rangeList) == 0:
+                        lines = lines[:loc] +self.makeCode(filename,codetype,self.parse(filename,start,end)) + lines[loc+1:]
                     else:
                         result = []
                         for index in rangeList:
-                            line = self.parse(filename,int(index),-1,False)
+                            line = self.parse(filename,int(index),int(index))
                             if len(line) > 0:
                                 result.append("[...]")
-                                result.extend()
+                                result.extend(line)
                             else:
                                 result.append("Line: "+index+" Could not be found.");
-                                
+
                         lines = lines[:loc] +self.makeCode(filename,codetype,result)+ lines[loc+1:]
-                        
+
                     if filename != self.m_filename:
-                        self.m_filename = filename;
+                        self.m_filename = filename
                 else:
                     done = True
         return lines
@@ -120,31 +124,31 @@ class IncLinePreprocessor(Preprocessor):
     def makeCode(self,filename,codeType,codeList):
         output = [];
         output.append("```"+codeType)
-        output.append("Source file: "+filename+"\n\n")
         output.extend(codeList)
         output.append("```")
         return output
 
-    def parse(self,filename,start=0,end=0,wholepage = True):
-        #correct start
-        if start == 1:
+    def parse(self,filename,start=0,end=0):
+        if start > 0:
             start -= 1
+        if end > 0:
+            end -= 1
+
         #check if filename is not the same then load data
         data = None
         if filename != self.m_filename:
             data = self.readFile(filename)
         else:
             data = self.m_code
+
         #parse
         outcome = []
         for cnt, line in enumerate(data):
             line = line.rstrip('\n')
-            if cnt >= start and cnt <= end or wholepage == True:
+            if cnt >= start and (cnt <= end or end == -1):
                 outcome.append(str(cnt)+": "+line)
-            elif end == -1 and cnt == start:
-                outcome.append(str(cnt)+": "+line)
-        return outcome        
-            
+        return outcome
+
     def readFile(self,filename):
         filename = os.path.expanduser(filename)
         if not os.path.isabs(filename):
@@ -158,9 +162,14 @@ class IncLinePreprocessor(Preprocessor):
                 return self.m_code
         except Exception as e:
             print('Warning: could not find file {}. Ignoring '
-                'include statement. Error: {}'.format(self.m_filename, e))
-            return ['Warning: could not find file {}. File:'.format(self.m_filename, e)]
-        
+                'include statement. Error: {}'.format(filename, e))
+            return ['Warning: could not find file {}.'.format(filename, e)]
+
 
 def makeExtension(*args,**kwargs):
     return MarkdownIncludeLines(kwargs)
+
+# For testing
+# if __name__ == "__main__":
+#     processor = IncLinePreprocessor(None, {"base_path": ".", "encoding": "utf-8"})
+#     print("Result:", processor.run(["{python 11- testfile.txt}"]))
