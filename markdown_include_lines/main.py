@@ -22,17 +22,17 @@
 # the syntax of this project is: [...] subtsitute with the right content
 # {[file type] [start at line] - [end at line] [file]}
 # example:
-# {python 15-20 include.py}
+# {include-file 15-20 include.py}
 # In case you want to include the whole file:
-# {python * include.py}
+# {include-file * include.py}
 # In case you want to include a suffix of a file:
-# {python 15- include.py}
+# {include-file 15- include.py}
 # In case you want to include a preffix of a file:
-# {python -15 include.py}
+# {include-file -15 include.py}
 # In case you want to include only one line:
-# {python 15 include.py}
+# {include-file 15 include.py}
 # In case you want to include only certain lines of code:
-# {python [15,20,3] include.py}
+# {include-file [15,20,3] include.py}
 
 from __future__ import print_function
 import re
@@ -44,7 +44,7 @@ from markdown.preprocessors import Preprocessor
 # version 1.0
 #SYNTAX = re.compile(r'\{([a-z]+)\s(([0-9]+)\s-\s([0-9]+)|([0-9]+)-([0-9]+)|([0-9]+)\s-([0-9]+)|([0-9]+)-\s([0-9]+)|\*)\s(.*)}')
 #version 1.2
-SYNTAX = re.compile(r'\{([a-z]+)\s(([0-9]+)?\s?-\s?([0-9]+)?|\*|([0-9]+)|\[(.*)\])\s(.*)}')
+SYNTAX = re.compile(r'\{include\-file\s(([0-9]+)?\s?-\s?([0-9]+)?|\*|([0-9]+)|\[(.*)\])\s(.*)}')
 
 class MarkdownIncludeLines(Extension):
     def __init__(self, configs={}):
@@ -78,37 +78,34 @@ class IncLinePreprocessor(Preprocessor):
             done = True
             for line in lines:
                 loc = lines.index(line)
-                m = SYNTAX.search(line)
-                if m:
+                if SYNTAX.search(line):
                     match = SYNTAX.match(line)
-                    codetype = match.group(1)
-                    filename = match.group(7)
+                    if match == None:
+                        continue
+                    filename = match.group(6)
                     start = -1
                     end = -1
 
                     rangeList = []
-                    if match.group(3) != None or match.group(4) != None:
-                        if match.group(3) != None:
-                            start = int(match.group(3))
+                    if match.group(2) != None or match.group(3) != None:
+                        if match.group(2) != None:
+                            start = int(match.group(2))
                         else:
                             start = 0
-                        if match.group(4) != None:
-                            end = int(match.group(4))
-                    elif match.group(6) != None:
-                      rangeList = match.group(6).split(",")
-                    elif match.group(2) != None:
-                      if match.group(2) == "*":
+                        if match.group(3) != None:
+                            end = int(match.group(3))
+                    elif match.group(5) != None:
+                      rangeList = match.group(5).split(",")
+                    elif match.group(1) != None:
+                      if match.group(1) == "*":
                          start = 0
                       else:
-                        end = start = int(match.group(2))
+                        end = start = int(match.group(1))
 
+                    result = []
                     if len(rangeList) == 0:
-                        new_lines = self.parse(filename,start,end)
-                        if len(new_lines) > 0:
-                            lines = lines[:loc] +self.makeCode(filename,codetype,new_lines) + lines[loc+1:]
-                            done = False
+                        result = self.parse(filename,start,end)
                     else:
-                        result = []
                         for index in rangeList:
                             line = self.parse(filename,int(index),int(index))
                             if len(line) > 0:
@@ -116,19 +113,13 @@ class IncLinePreprocessor(Preprocessor):
                                 result.extend(line)
                             else:
                                 result.append("Line: "+index+" Could not be found.")
+                    if len(result) > 0:
                         done = False
-                        lines = lines[:loc] +self.makeCode(filename,codetype,result)+ lines[loc+1:]
+                        lines = lines[:loc] +result+ lines[loc+1:]
 
                     if filename != self.m_filename:
                         self.m_filename = filename
         return lines
-
-    def makeCode(self,filename,codeType,codeList):
-        output = [];
-        output.append("```"+codeType)
-        output.extend(codeList)
-        output.append("```")
-        return output
 
     def parse(self,filename,start=0,end=0):
         if start > 0:
@@ -172,6 +163,6 @@ def makeExtension(*args,**kwargs):
     return MarkdownIncludeLines(kwargs)
 
 # For testing
-if __name__ == "__main__":
-    processor = IncLinePreprocessor(None, {"base_path": ".", "encoding": "utf-8"})
-    print("Result:", processor.run(["{python 11- filenotfound.txt}"]))
+# if __name__ == "__main__":
+#     processor = IncLinePreprocessor(None, {"base_path": ".", "encoding": "utf-8"})
+#     print("Result:", processor.run(["{include-file 5- test.txt}"]))
